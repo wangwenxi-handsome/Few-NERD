@@ -6,6 +6,7 @@ import numpy as np
 import json
 
 def get_class_name(rawtag):
+    # 去掉B-或I-开头的
     # get (finegrained) class name
     if rawtag.startswith('B-') or rawtag.startswith('I-'):
         return rawtag[2:]
@@ -19,6 +20,7 @@ class Sample(FewshotSampleBase):
         self.words = [word.lower() for word in self.words]
         # strip B-, I-
         self.normalized_tags = list(map(get_class_name, self.tags))
+        # 存放了数据集中每个实体的个数
         self.class_count = {}
 
     def __count_entities__(self):
@@ -47,6 +49,7 @@ class Sample(FewshotSampleBase):
             return self.class_count
 
     def get_tag_class(self):
+        # 获取所有的实体类型
         # strip 'B' 'I' 
         tag_class = list(set(self.normalized_tags))
         if 'O' in tag_class:
@@ -54,6 +57,7 @@ class Sample(FewshotSampleBase):
         return tag_class
 
     def valid(self, target_classes):
+        # 交集不为空 且 差集为空
         return (set(self.get_class_count().keys()).intersection(set(target_classes))) and not (set(self.get_class_count().keys()).difference(set(target_classes)))
 
     def __str__(self):
@@ -79,6 +83,7 @@ class FewShotNERDatasetWithRandomSampling(data.Dataset):
         self.ignore_label_id = ignore_label_id
 
     def __insert_sample__(self, index, sample_classes):
+        # 赋值给class2sampleid，记录了每个实体对应的sample id，一个sample id可能会出现在多个实体中
         for item in sample_classes:
             if item in self.class2sampleid:
                 self.class2sampleid[item].append(index)
@@ -86,6 +91,7 @@ class FewShotNERDatasetWithRandomSampling(data.Dataset):
                 self.class2sampleid[item] = [index]
     
     def __load_data_from_file__(self, filepath):
+        # 处理原始文件，将每一句话处理成一个sample
         samples = []
         classes = []
         with open(filepath, 'r', encoding='utf-8')as f:
@@ -108,21 +114,23 @@ class FewShotNERDatasetWithRandomSampling(data.Dataset):
         return samples, classes
 
     def __get_token_label_list__(self, sample):
+        # 将一句话处理成token和label的形式
         tokens = []
         labels = []
         for word, tag in zip(sample.words, sample.normalized_tags):
+            # 以单词为单位进行tokenizer
             word_tokens = self.tokenizer.tokenize(word)
             if word_tokens:
                 tokens.extend(word_tokens)
-                # Use the real label id for the first token of the word, and padding ids for the remaining tokens
+                # 当一个词被拆分成多个小词时，只有首词的label标记为这个词的label，其他词标记为-1
                 word_labels = [self.tag2label[tag]] + [self.ignore_label_id] * (len(word_tokens) - 1)
                 labels.extend(word_labels)
         return tokens, labels
 
-
     def __getraw__(self, tokens, labels):
-        # get tokenized word list, attention mask, text mask (mask [CLS], [SEP] as well), tags
-        
+        # 将分词好的句子和label处理成bert的输入形式
+
+        # get tokenized word list, attention mask, text mask (mask [CLS], [SEP] as well), tags   
         # split into chunks of length (max_length-2)
         # 2 is for special tokens [CLS] and [SEP]
         tokens_list = []
@@ -164,6 +172,7 @@ class FewShotNERDatasetWithRandomSampling(data.Dataset):
         return indexed_tokens_list, mask_list, text_mask_list, labels_list
 
     def __additem__(self, index, d, word, mask, text_mask, label):
+        # 向dataset中添加一句话（bert的输入形式）
         d['index'].append(index)
         d['word'] += word
         d['mask'] += mask
@@ -189,14 +198,19 @@ class FewShotNERDatasetWithRandomSampling(data.Dataset):
             mask = torch.tensor(mask).long()
             text_mask = torch.tensor(text_mask).long()
             self.__additem__(idx, dataset, word, mask, text_mask, label)
+        
+        # 保存这个dataset中句子的个数
         dataset['sentence_num'] = [len(dataset['word'])]
+        # 保存label和tag的对应关系，只有在query set时才需要，应该是为了decode看预测效果
         if savelabeldic:
             dataset['label2tag'] = [self.label2tag]
         return dataset
 
     def __getitem__(self, index):
+        # 取出一条support set 和 query set，这被认为是一条数据
         target_classes, support_idx, query_idx = self.sampler.__next__()
         # add 'O' and make sure 'O' is labeled 0
+        # 获取tag与label的对应关系
         distinct_tags = ['O'] + target_classes
         self.tag2label = {tag:idx for idx, tag in enumerate(distinct_tags)}
         self.label2tag = {idx:tag for idx, tag in enumerate(distinct_tags)}
@@ -284,6 +298,10 @@ class FewShotNERDataset(FewShotNERDatasetWithRandomSampling):
 
 
 def collate_fn(data):
+    # dataset中的每一条数据的形式是(support_set, query_set)
+    # one batch data is [(support_set, query_set), (support_set, query_set)......]
+    # support_set is [{'word': [], 'mask': [], 'label':[], 'sentence_num':[], 'text_mask':[]}......]
+    # 所以这里做的处理为将每一个键值extend，且concat成tensor
     batch_support = {'word': [], 'mask': [], 'label':[], 'sentence_num':[], 'text_mask':[]}
     batch_query = {'word': [], 'mask': [], 'label':[], 'sentence_num':[], 'label2tag':[], 'text_mask':[]}
     support_sets, query_sets = zip(*data)
@@ -292,12 +310,14 @@ def collate_fn(data):
             batch_support[k] += support_sets[i][k]
         for k in batch_query:
             batch_query[k] += query_sets[i][k]
+
     for k in batch_support:
         if k != 'label' and k != 'sentence_num':
             batch_support[k] = torch.stack(batch_support[k], 0)
     for k in batch_query:
         if k !='label' and k != 'sentence_num' and k!= 'label2tag':
             batch_query[k] = torch.stack(batch_query[k], 0)
+
     batch_support['label'] = [torch.tensor(tag_list).long() for tag_list in batch_support['label']]
     batch_query['label'] = [torch.tensor(tag_list).long() for tag_list in batch_query['label']]
     return batch_support, batch_query

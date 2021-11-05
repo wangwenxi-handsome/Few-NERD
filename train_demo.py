@@ -22,6 +22,7 @@ def set_seed(seed):
     torch.backends.cudnn.deterministic = True
 
 def main():
+    # 读取命令行参数
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode', default='inter',
             help='training mode, must be in [inter, intra, supervised]')
@@ -68,7 +69,6 @@ def main():
     parser.add_argument('--use_sampled_data', action='store_true',
            help='use released sampled data, the data should be stored at "data/episode-data/" ')
 
-
     # only for bert / roberta
     parser.add_argument('--pretrain_ckpt', default=None,
            help='bert / roberta pre-trained checkpoint')
@@ -104,6 +104,7 @@ def main():
     pretrain_ckpt = opt.pretrain_ckpt or 'bert-base-uncased'
     word_encoder = BERTWordEncoder(
             pretrain_ckpt)
+    # 默认使用的即bert使用的分词器
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
     print('loading data...')
@@ -121,6 +122,7 @@ def main():
             os.system(f'bash data/download.sh episode-data')
             os.system('unzip -d data/ data/episode-data.zip')
 
+    # 获取dataloader
     train_data_loader = get_loader(opt.train, tokenizer,
             N=trainN, K=K, Q=Q, batch_size=batch_size, max_length=max_length, ignore_index=opt.ignore_index, use_sampled_data=opt.use_sampled_data)
     val_data_loader = get_loader(opt.dev, tokenizer,

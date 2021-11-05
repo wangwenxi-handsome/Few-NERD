@@ -40,18 +40,21 @@ class FewshotSampler:
         random.seed(random_state)
 
     def __get_all_classes__(self):
+        # 获取samples中的所有实体类型
         classes = []
         for sample in self.samples:
             classes += list(sample.get_class_count().keys())
         return list(set(classes))
 
     def __check__(self):
+        # 检查samples中都含有get_class_count
         for idx, sample in enumerate(self.samples):
             if not hasattr(sample,'get_class_count'):
                 print('[ERROR] samples in self.samples expected to have `get_class_count` attribute, but self.samples[{idx}] does not')
                 raise ValueError
 
     def __additem__(self, index, set_class):
+        # 用指定sample更新set class中的实体个数
         class_count = self.samples[index].get_class_count()
         for class_name in class_count:
             if class_name in set_class:
@@ -60,6 +63,9 @@ class FewshotSampler:
                 set_class[class_name] = class_count[class_name]
 
     def __valid_sample__(self, sample, set_class, target_classes):
+        # 判断sample是否满足采样条件
+        # 采样条件有 1. sample存在set class中需要的实体（小于k），且个数不能大于2k
+        # 2. sample中不存在set class中不需要的实体
         threshold = 2 * set_class['k']
         class_count = sample.get_class_count()
         if not class_count:
@@ -75,7 +81,8 @@ class FewshotSampler:
         return isvalid
 
     def __finish__(self, set_class):
-        if len(set_class) < self.N+1:
+        # 检测set class中的实体个数已经满足N，K
+        if len(set_class) < self.N + 1:
             return False
         for k in set_class:
             if set_class[k] < set_class['k']:
@@ -83,6 +90,7 @@ class FewshotSampler:
         return True 
 
     def __get_candidates__(self, target_classes):
+        # 获取所以可以选择的sample
         return [idx for idx, sample in enumerate(self.samples) if sample.valid(target_classes)]
 
     def __next__(self):
@@ -91,12 +99,14 @@ class FewshotSampler:
         return:
         target_classes: List[any]
         support_idx: List[int], sample index in support set in samples list
-        support_idx: List[int], sample index in query set in samples list
+        query_idx: List[int], sample index in query set in samples list
+        返回的是采样的目标实体列表，support set 和 query set中对应的sample id
         '''
         support_class = {'k':self.K}
         support_idx = []
         query_class = {'k':self.Q}
         query_idx = []
+        # 在候选实体中随机选择N个
         target_classes = random.sample(self.classes, self.N)
         candidates = self.__get_candidates__(target_classes)
         while not candidates:
