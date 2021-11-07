@@ -137,6 +137,7 @@ def main():
     if len(opt.ckpt_name) > 0:
         prefix += '-' + opt.ckpt_name
     
+    # 初始化模型和框架
     if model_name == 'proto':
         print('use proto')
         model = Proto(word_encoder, dot=opt.dot, ignore_index=opt.ignore_index)

@@ -74,6 +74,7 @@ class FewShotNERModel(nn.Module):
         nn.Module.__init__(self)
         self.ignore_index = ignore_index
         self.word_encoder = nn.DataParallel(my_word_encoder)
+        # 忽略-1
         self.cost = nn.CrossEntropyLoss(ignore_index=ignore_index)
 
     
@@ -98,6 +99,7 @@ class FewShotNERModel(nn.Module):
         return self.cost(logits.view(-1, N), label.view(-1))
     
     def __delete_ignore_index(self, pred, label):
+        # 除去不考虑的句子片段和label片段
         pred = pred[label != self.ignore_index]
         label = label[label != self.ignore_index]
         assert pred.shape[0] == label.shape[0]
@@ -114,6 +116,7 @@ class FewShotNERModel(nn.Module):
 
     def __get_class_span_dict__(self, label, is_string=False):
         '''
+        将一句话的labels从seq tag形式转化为实体的形式
         return a dictionary of each class label/tag corresponding to the entity positions in the sentence
         {label:[(start_pos, end_pos), ...]}
         '''
@@ -254,13 +257,17 @@ class FewShotNERModel(nn.Module):
         '''
         return entity level count of total prediction, true labels, and correct prediction
         '''
+        # 输入为pred / label: [[0, 2, 4], [1, 4, 5]......], 每一个子列表代表一个句子
+        # 将一批句子的pred和label摊平，并删去ignore index对应的tag
         pred = pred.view(-1)
         label = label.view(-1)
         pred, label = self.__delete_ignore_index(pred, label)
         pred = pred.cpu().numpy().tolist()
         label = label.cpu().numpy().tolist()
+        # 将seq tag的形式转换成entity的形式
         pred_class_span = self.__get_class_span_dict__(pred)
         label_class_span = self.__get_class_span_dict__(label)
+        # 返回预测出来的实体个数，标签中的实体个数，以及正确预测的实体个数
         pred_cnt = self.__get_cnt__(pred_class_span)
         label_cnt = self.__get_cnt__(label_class_span)
         correct_cnt = self.__get_intersect_by_entity__(pred_class_span, label_class_span)
@@ -275,7 +282,9 @@ class FewShotNERModel(nn.Module):
         pred = pred.view(-1)
         label = label.view(-1)
         pred, label = self.__delete_ignore_index(pred, label)
+        # 获取将无实体token预测成有实体token的个数
         fp = torch.sum(((pred > 0) & (label == 0)).type(torch.FloatTensor))
+        # 获取将有实体token预测成无实体token的个数
         fn = torch.sum(((pred == 0) & (label > 0)).type(torch.FloatTensor))
         pred = pred.cpu().numpy().tolist()
         label = label.cpu().numpy().tolist()
@@ -351,6 +360,7 @@ class FewShotNERFramework:
     
         # Init optimizer
         print('Use bert optim!')
+        # 设置优化器和学习率
         parameters_to_optimize = list(model.named_parameters())
         no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
         parameters_to_optimize = [
@@ -376,6 +386,7 @@ class FewShotNERFramework:
                 print('load {} from {}'.format(name, load_ckpt))
                 own_state[name].copy_(param)
 
+        # 是否使用半精度
         if fp16:
             from apex import amp
             model, optimizer = amp.initialize(model, optimizer, opt_level='O1')

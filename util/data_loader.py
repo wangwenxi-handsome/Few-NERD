@@ -167,7 +167,8 @@ class FewShotNERDatasetWithRandomSampling(data.Dataset):
             text_mask = np.zeros((self.max_length), dtype=np.int32)
             text_mask[1:len(tokens)-1] = 1
             text_mask_list.append(text_mask)
-
+            
+            # label list中不包含特殊字符的label
             assert len(labels_list[i]) == len(tokens) - 2, print(labels_list[i], tokens)
         return indexed_tokens_list, mask_list, text_mask_list, labels_list
 

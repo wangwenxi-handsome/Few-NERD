@@ -14,6 +14,7 @@ class Proto(util.framework.FewShotNERModel):
         self.dot = dot
 
     def __dist__(self, x, y, dim):
+        # 计算x和y之间的距离
         if self.dot:
             return (x * y).sum(dim)
         else:
@@ -27,11 +28,15 @@ class Proto(util.framework.FewShotNERModel):
 
     def __get_proto__(self, embedding, tag, mask):
         proto = []
+        # 将embedding展开成all tokens * 768的维度，再过一个mask
         embedding = embedding[mask==1].view(-1, embedding.size(-1))
+        # 将所有的tag concat起来
         tag = torch.cat(tag, 0)
         assert tag.size(0) == embedding.size(0)
-        for label in range(torch.max(tag)+1):
+        # 计算每种label的tokens的均值
+        for label in range(torch.max(tag) + 1):
             proto.append(torch.mean(embedding[tag==label], 0))
+        # stack后的size是（tag num， 768）
         proto = torch.stack(proto)
         return proto
 
@@ -55,13 +60,15 @@ class Proto(util.framework.FewShotNERModel):
         assert support_emb.size()[:2] == support['mask'].size()
         assert query_emb.size()[:2] == query['mask'].size()
 
+        # 这里意味着输入是一个batch的句子
         for i, sent_support_num in enumerate(support['sentence_num']):
             sent_query_num = query['sentence_num'][i]
             # Calculate prototype for each class
             support_proto = self.__get_proto__(
                 support_emb[current_support_num:current_support_num+sent_support_num], 
                 support['label'][current_support_num:current_support_num+sent_support_num], 
-                support['text_mask'][current_support_num: current_support_num+sent_support_num])
+                support['text_mask'][current_support_num: current_support_num+sent_support_num],
+            )
             # calculate distance to each prototype
             logits.append(self.__batch_dist__(
                 support_proto, 
