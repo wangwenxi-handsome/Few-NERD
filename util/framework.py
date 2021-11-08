@@ -33,13 +33,17 @@ def get_abstract_transitions(train_fname, use_sampled_data=True):
     o_o, o_i = 0., 0.
     i_o, i_i, x_y = 0., 0., 0.
     for tags in tag_lists:
-        if tags[0] == 'O': s_o += 1
-        else: s_i += 1
+        if tags[0] == 'O': 
+            s_o += 1
+        else: 
+            s_i += 1
         for i in range(len(tags)-1):
             p, n = tags[i], tags[i+1]
             if p == 'O':
-                if n == 'O': o_o += 1
-                else: o_i += 1
+                if n == 'O': 
+                    o_o += 1
+                else: 
+                    o_i += 1
             else:
                 if n == 'O':
                     i_o += 1
@@ -76,7 +80,6 @@ class FewShotNERModel(nn.Module):
         self.word_encoder = nn.DataParallel(my_word_encoder)
         # 忽略-1
         self.cost = nn.CrossEntropyLoss(ignore_index=ignore_index)
-
     
     def forward(self, support, query, N, K, Q):
         '''
@@ -306,7 +309,7 @@ class FewShotNERFramework:
         self.viterbi = viterbi
         if viterbi:
             abstract_transitions = get_abstract_transitions(train_fname, use_sampled_data=use_sampled_data)
-            self.viterbi_decoder = ViterbiDecoder(N+2, abstract_transitions, tau)
+            self.viterbi_decoder = ViterbiDecoder(N + 2, abstract_transitions, tau)
     
     def __load_model__(self, ckpt):
         '''
