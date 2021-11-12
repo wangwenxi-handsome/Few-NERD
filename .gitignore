@@ -156,3 +156,6 @@ cython_debug/
 
 # data
 **/episode-data
+**/debug
+**/.DS_Store
+data/test.tar.gz

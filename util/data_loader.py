@@ -323,16 +323,17 @@ def collate_fn(data):
     batch_query['label'] = [torch.tensor(tag_list).long() for tag_list in batch_query['label']]
     return batch_support, batch_query
 
+
 def get_loader(filepath, tokenizer, N, K, Q, batch_size, max_length, 
         num_workers=8, collate_fn=collate_fn, ignore_index=-1, use_sampled_data=True):
-    if not use_sampled_data:
-        dataset = FewShotNERDatasetWithRandomSampling(filepath, tokenizer, N, K, Q, max_length, ignore_label_id=ignore_index)
-    else:
+    if use_sampled_data:
         dataset = FewShotNERDataset(filepath, tokenizer, max_length, ignore_label_id=ignore_index)
+    else:     
+        dataset = FewShotNERDatasetWithRandomSampling(filepath, tokenizer, N, K, Q, max_length, ignore_label_id=ignore_index)
     data_loader = data.DataLoader(dataset=dataset,
             batch_size=batch_size,
             shuffle=True,
-            pin_memory=True,
+            pin_memory=False,
             num_workers=num_workers,
             collate_fn=collate_fn)
     return data_loader

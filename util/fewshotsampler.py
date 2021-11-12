@@ -1,4 +1,6 @@
 import random
+
+
 class FewshotSampleBase:
     '''
     Abstract Class
