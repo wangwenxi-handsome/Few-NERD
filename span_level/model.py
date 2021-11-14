@@ -4,7 +4,7 @@ import torch.nn as nn
 
 class SpanNNShot(nn.Module):
     
-    def __init__(self, word_encoder, dot=False, ignore_index=-1):
+    def __init__(self, word_encoder, dot = False, ignore_index = -1):
         self.ignore_index = ignore_index
         self.word_encoder = nn.DataParallel(word_encoder)
         self.drop = nn.Dropout()
@@ -19,12 +19,10 @@ class SpanNNShot(nn.Module):
             return -(torch.pow(x - y, 2)).sum(dim)
 
     def __batch_dist__(self, S, Q):
-        for q in Q:
-            
         return self.__dist__(S.unsqueeze(0), Q.unsqueeze(1), 2)
 
     def __get_nearest_dist__(self, embedding, tag, query):
-        # 将support set中的span铺平
+        # 将support query中的span铺平
         nearest_dist = []
         S = []
         S_tag = []
@@ -32,13 +30,20 @@ class SpanNNShot(nn.Module):
             S.extend(e)
             S_tag.extend(tag[i])
         assert len(S) == len(S_tag)
+        S = torch.cat(S, axis = 0)
+        S_tag = torch.cat(S_tag, axis = 0)
 
-        # 计算query set中的每一个span与support set中的距离
-        dist = self.__batch_dist__(S, query)
-
-        for label in range(torch.max(tag)+1):
-            nearest_dist.append(torch.max(dist[:,tag==label], 1)[0])
-        nearest_dist = torch.stack(nearest_dist, dim=1)
+        Q = []
+        for q in query:
+            Q.extend(q)
+        Q = torch.cat(Q, axis = 0)
+        
+        # 计算query set中的每一个span与support set中的距离并保留与每一类最近的距离
+        dist = self.__batch_dist__(S, Q)
+        for label in range(torch.max(S_tag) + 1):
+            nearest_dist.append(torch.max(dist[:, S_tag == label], 1)[0])
+        nearest_dist = torch.stack(nearest_dist, dim = 1)
+        # span_nums * class
         return nearest_dist
 
     def __get_span_tensor__(self, sent_embs, text_mask):
@@ -72,15 +77,12 @@ class SpanNNShot(nn.Module):
         support_spans = self.__get_span_tensor__(support_emb, support["text_mask"])
         query_spans = self.__get_span_tensor__(query_emb, query["text_mask"])
 
-        # 检查一下mask形状对不对，虽然我不知道这样做的意义
         logits = []
         current_support_num = 0
         current_query_num = 0
-
         # 一次取出一条数据进行操作，一条数据是指 N-way-K-shot-Q-shot
         for i, sent_support_num in enumerate(support['sentence_num']):
             sent_query_num = query['sentence_num'][i]
-            # Calculate nearest distance to single entity in each class in support set
             logits.append(self.__get_nearest_dist__(
                 support_spans[current_support_num: current_support_num + sent_support_num], 
                 support['label'][current_support_num: current_support_num + sent_support_num], 
