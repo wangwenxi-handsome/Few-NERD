@@ -99,3 +99,20 @@ class SpanNNShot(nn.Module):
         logits = torch.cat(logits, 0)
         _, pred = torch.max(logits, 1)
         return logits, pred
+
+    def loss(self, logits, label):
+        return self.cost(logits, label)
+
+    def metrics_by_entity(self, pred, label):
+        assert len(pred) == len(label)
+        pred_entity = 0
+        label_entity = 0
+        correct_entity = 0
+        for i in range(len(pred)):
+            if pred != 0:
+                pred_entity += 1
+            if label != 0:
+                label_entity += 1
+            if pred != 0 and label != 0 and pred == label:
+                correct_entity += 1
+        return pred_entity, label_entity, correct_entity
