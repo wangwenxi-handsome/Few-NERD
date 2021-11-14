@@ -129,7 +129,7 @@ class FewShotNERDatasetWithRandomSampling(data.Dataset):
 
     def __getraw__(self, tokens, labels):
         # 将分词好的句子和label处理成bert的输入形式
-
+        # 这里需要注意的是，一个长句子会被拆成多句话
         # get tokenized word list, attention mask, text mask (mask [CLS], [SEP] as well), tags   
         # split into chunks of length (max_length-2)
         # 2 is for special tokens [CLS] and [SEP]
