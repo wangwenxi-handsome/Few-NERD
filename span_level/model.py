@@ -1,3 +1,4 @@
+import time
 import torch
 import torch.nn as nn
 
@@ -5,6 +6,7 @@ import torch.nn as nn
 class SpanNNShot(nn.Module):
     
     def __init__(self, word_encoder, dot = False, ignore_index = -1):
+        super(SpanNNShot, self).__init__()
         self.ignore_index = ignore_index
         self.word_encoder = nn.DataParallel(word_encoder)
         self.drop = nn.Dropout()
@@ -19,7 +21,10 @@ class SpanNNShot(nn.Module):
             return -(torch.pow(x - y, 2)).sum(dim)
 
     def __batch_dist__(self, S, Q):
-        return self.__dist__(S.unsqueeze(0), Q.unsqueeze(1), 2)
+        # 直接计算的话显存不足
+        S = S.cpu()
+        Q = Q.cpu()
+        return self.__dist__(S.unsqueeze(0), Q.unsqueeze(1), 2).cuda()
 
     def __get_nearest_dist__(self, embedding, tag, query):
         # 将support query中的span铺平
@@ -30,13 +35,13 @@ class SpanNNShot(nn.Module):
             S.extend(e)
             S_tag.extend(tag[i])
         assert len(S) == len(S_tag)
-        S = torch.cat(S, axis = 0)
-        S_tag = torch.cat(S_tag, axis = 0)
+        S = torch.stack(S, axis = 0)
+        S_tag = torch.tensor(S_tag, dtype = torch.long)
 
         Q = []
         for q in query:
             Q.extend(q)
-        Q = torch.cat(Q, axis = 0)
+        Q = torch.stack(Q, axis = 0)
         
         # 计算query set中的每一个span与support set中的距离并保留与每一类最近的距离
         dist = self.__batch_dist__(S, Q)
@@ -90,7 +95,7 @@ class SpanNNShot(nn.Module):
             ))
             current_query_num += sent_query_num
             current_support_num += sent_support_num
-
+        
         logits = torch.cat(logits, 0)
         _, pred = torch.max(logits, 1)
         return logits, pred
