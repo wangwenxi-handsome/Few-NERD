@@ -198,7 +198,7 @@ def get_loader(
         tokenizer,
         batch_size, 
         max_length, 
-        num_workers = 4, 
+        num_workers = 0, 
         collate_fn = collate_fn, 
         ignore_index = -1
     ):

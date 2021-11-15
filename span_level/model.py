@@ -22,9 +22,7 @@ class SpanNNShot(nn.Module):
 
     def __batch_dist__(self, S, Q):
         # 直接计算的话显存不足
-        S = S.cpu()
-        Q = Q.cpu()
-        return self.__dist__(S.unsqueeze(0), Q.unsqueeze(1), 2).cuda()
+        return self.__dist__(S.unsqueeze(0), Q.unsqueeze(1), 2)
 
     def __get_nearest_dist__(self, embedding, tag, query):
         # 将support query中的span铺平
@@ -71,8 +69,8 @@ class SpanNNShot(nn.Module):
         Q: Num of instances in the query set
         '''
         # 利用word encoder对句子解码
-        support_emb = self.word_encoder(support['word'], support['mask']) # [num_sent, number_of_tokens, 768]
-        query_emb = self.word_encoder(query['word'], query['mask']) # [num_sent, number_of_tokens, 768]
+        support_emb = self.word_encoder(support['word'], support['mask']).cpu() # [num_sent, number_of_tokens, 768]
+        query_emb = self.word_encoder(query['word'], query['mask']).cpu() # [num_sent, number_of_tokens, 768]
         support_emb = self.drop(support_emb)
         query_emb = self.drop(query_emb)
         assert support_emb.size()[:2] == support['mask'].size()
@@ -109,10 +107,10 @@ class SpanNNShot(nn.Module):
         label_entity = 0
         correct_entity = 0
         for i in range(len(pred)):
-            if pred != 0:
+            if pred[i] != 0:
                 pred_entity += 1
-            if label != 0:
+            if label[i] != 0:
                 label_entity += 1
-            if pred != 0 and label != 0 and pred == label:
+            if pred[i] != 0 and label[i] != 0 and pred[i] == label:
                 correct_entity += 1
         return pred_entity, label_entity, correct_entity

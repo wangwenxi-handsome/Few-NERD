@@ -110,9 +110,11 @@ class FewShotNERFramework:
                         if k != 'label' and k != 'sentence_num':
                             support[k] = support[k].cuda()
                             query[k] = query[k].cuda()
-                    label = torch.cat(query['label'], 0)
-                    label = label.cuda()
-
+                    label = []
+                    for l in query['label']:
+                        label.extend(l)
+                    label = torch.tensor(label)
+                
                 logits, pred = model(support, query)
                 assert logits.shape[0] == label.shape[0], print(logits.shape, label.shape)
                 loss = model.loss(logits, label) / float(grad_iter)
@@ -135,6 +137,7 @@ class FewShotNERFramework:
                 label_cnt += tmp_label_cnt
                 correct_cnt += correct
                 iter_sample += 1
+                
                 if (it + 1) % 100 == 0 or (it + 1) % val_step == 0:
                     precision = correct_cnt / pred_cnt
                     recall = correct_cnt / label_cnt
@@ -211,8 +214,10 @@ class FewShotNERFramework:
                             if k != 'label' and k != 'sentence_num':
                                 support[k] = support[k].cuda()
                                 query[k] = query[k].cuda()
-                        label = torch.cat(query['label'], 0)
-                        label = label.cuda()
+                        label = []
+                        for l in query['label']:
+                            label.extend(l)
+                        label = torch.tensor(label)
                     logits, pred = model(support, query)
 
                     tmp_pred_cnt, tmp_label_cnt, correct = model.metrics_by_entity(pred, label)
