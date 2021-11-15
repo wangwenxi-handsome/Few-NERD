@@ -20,9 +20,29 @@ class SpanNNShot(nn.Module):
         else:
             return -(torch.pow(x - y, 2)).sum(dim)
 
-    def __batch_dist__(self, S, Q):
+    def __batch_dist__(self, S, Q, tag):
         # 直接计算的话显存不足
-        return self.__dist__(S.unsqueeze(0), Q.unsqueeze(1), 2)
+        # return self.__dist__(S.unsqueeze(0), Q.unsqueeze(1), 2)
+        dists = []
+        nearest_dists = []
+        
+        S = S.unsqueeze(0)
+        for i in range(Q.size()[0]):
+            print(i)
+            dists.append(self.__dist__(S, Q[i: i + 1].unsqueeze(1), 2))
+            # every 1000 or end 压缩一次
+            if len(dists) == 1000 or i == Q.size()[0] - 1:
+                nearest_dist = []
+                # 将已有tensor（1000 * support_size）拼接起来
+                dists = torch.cat(dists, axis = 0)
+                for label in range(torch.max(tag + 1)):
+                    nearest_dist.append(torch.max(dists[:, tag == label], 1)[0])
+                # nearest dist size is (1000, class)
+                nearest_dist = torch.stack(nearest_dist, dim = 1)
+                nearest_dists.append(nearest_dist)
+                dists = []
+                                   
+        return torch.cat(nearest_dists, axis = 0)
 
     def __get_nearest_dist__(self, embedding, tag, query):
         # 将support query中的span铺平
@@ -40,14 +60,8 @@ class SpanNNShot(nn.Module):
         for q in query:
             Q.extend(q)
         Q = torch.stack(Q, axis = 0)
-        
-        # 计算query set中的每一个span与support set中的距离并保留与每一类最近的距离
-        dist = self.__batch_dist__(S, Q)
-        for label in range(torch.max(S_tag) + 1):
-            nearest_dist.append(torch.max(dist[:, S_tag == label], 1)[0])
-        nearest_dist = torch.stack(nearest_dist, dim = 1)
-        # span_nums * class
-        return nearest_dist
+
+        return self.__batch_dist__(S, Q, S_tag)
 
     def __get_span_tensor__(self, sent_embs, text_mask):
         span_tensors = []
@@ -69,8 +83,8 @@ class SpanNNShot(nn.Module):
         Q: Num of instances in the query set
         '''
         # 利用word encoder对句子解码
-        support_emb = self.word_encoder(support['word'], support['mask']).cpu() # [num_sent, number_of_tokens, 768]
-        query_emb = self.word_encoder(query['word'], query['mask']).cpu() # [num_sent, number_of_tokens, 768]
+        support_emb = self.word_encoder(support['word'], support['mask']) # [num_sent, number_of_tokens, 768]
+        query_emb = self.word_encoder(query['word'], query['mask']) # [num_sent, number_of_tokens, 768]
         support_emb = self.drop(support_emb)
         query_emb = self.drop(query_emb)
         assert support_emb.size()[:2] == support['mask'].size()
@@ -93,6 +107,7 @@ class SpanNNShot(nn.Module):
             ))
             current_query_num += sent_query_num
             current_support_num += sent_support_num
+        del support_emb, query_emb
         
         logits = torch.cat(logits, 0)
         _, pred = torch.max(logits, 1)

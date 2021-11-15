@@ -113,13 +113,14 @@ class FewShotNERFramework:
                     label = []
                     for l in query['label']:
                         label.extend(l)
-                    label = torch.tensor(label)
+                    label = torch.tensor(label).cuda()
                 
                 logits, pred = model(support, query)
                 assert logits.shape[0] == label.shape[0], print(logits.shape, label.shape)
                 loss = model.loss(logits, label) / float(grad_iter)
                 tmp_pred_cnt, tmp_label_cnt, correct = model.metrics_by_entity(pred, label)
-                    
+                del logits, pred
+                
                 if fp16:
                     with amp.scale_loss(loss, optimizer) as scaled_loss:
                         scaled_loss.backward()
@@ -217,7 +218,7 @@ class FewShotNERFramework:
                         label = []
                         for l in query['label']:
                             label.extend(l)
-                        label = torch.tensor(label)
+                        label = torch.tensor(label).cuda()
                     logits, pred = model(support, query)
 
                     tmp_pred_cnt, tmp_label_cnt, correct = model.metrics_by_entity(pred, label)
