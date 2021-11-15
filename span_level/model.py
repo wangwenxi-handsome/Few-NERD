@@ -103,6 +103,16 @@ class SpanNNShot(nn.Module):
     def loss(self, logits, label):
         return self.cost(logits, label)
 
+    def item(self, x):
+        '''
+        PyTorch before and after 0.4
+        '''
+        torch_version = torch.__version__.split('.')
+        if int(torch_version[0]) == 0 and int(torch_version[1]) < 4:
+            return x[0]
+        else:
+            return x.item()
+
     def metrics_by_entity(self, pred, label):
         assert len(pred) == len(label)
         pred_entity = 0
