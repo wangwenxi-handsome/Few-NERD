@@ -109,30 +109,43 @@ class FewShotNERFramework:
                     for k in support:
                         if k != 'label' and k != 'sentence_num':
                             support[k] = support[k].cuda()
-                            query[k] = query[k].cuda()
-                    label = []
-                    for l in query['label']:
-                        label.extend(l)
-                    label = torch.tensor(label).cuda()
                 
-                logits, pred = model(support, query)
-                assert logits.shape[0] == label.shape[0], print(logits.shape, label.shape)
-                loss = model.loss(logits, label) / float(grad_iter)
-                tmp_pred_cnt, tmp_label_cnt, correct = model.metrics_by_entity(pred, label)
-                del logits, pred
-                
-                if fp16:
-                    with amp.scale_loss(loss, optimizer) as scaled_loss:
-                        scaled_loss.backward()
-                else:
-                    loss.backward()
+                # only support one batch
+                assert len(support["sentence_num"]) == 1
+                assert len(query["sentence_num"]) == 1
+                tmp_pred_cnt = 0 
+                tmp_label_cnt = 0 
+                correct = 0
+                for i in range(query["sentence_num"][0]):
+                    one_query = {}
+                    # 取出query中的一句话
+                    one_query["sentence_num"] = [1]
+                    one_query["label2tag"] = query["label2tag"]
+                    one_query["word"] = query["word"][i: i + 1].cuda()
+                    one_query["mask"] = query["mask"][i: i + 1].cuda()
+                    one_query["text_mask"] = query["text_mask"][i: i + 1].cuda()                   
+                    one_label = torch.tensor(query["label"][i]).cuda()
+                    
+                    # 模型预测
+                    logits, pred = model(support, one_query)
+                    loss = model.loss(logits, one_label) / float(grad_iter) / query["sentence_num"][0]
+                    iter_loss += self.item(loss.data)
+                    one_pred_cnt, one_label_cnt, one_correct = model.metrics_by_entity(pred, one_label)
+                    tmp_pred_cnt += one_pred_cnt
+                    tmp_label_cnt += one_label_cnt
+                    correct += one_correct
+                    if fp16:
+                        with amp.scale_loss(loss, optimizer) as scaled_loss:
+                            scaled_loss.backward()
+                    else:
+                        loss.backward()
+                    del logits, pred, loss
                 
                 if it % grad_iter == 0:
                     optimizer.step()
                     scheduler.step()
                     optimizer.zero_grad()
 
-                iter_loss += self.item(loss.data)
                 #iter_right += self.item(right.data)
                 pred_cnt += tmp_pred_cnt
                 label_cnt += tmp_label_cnt

@@ -20,29 +20,8 @@ class SpanNNShot(nn.Module):
         else:
             return -(torch.pow(x - y, 2)).sum(dim)
 
-    def __batch_dist__(self, S, Q, tag):
-        # 直接计算的话显存不足
-        # return self.__dist__(S.unsqueeze(0), Q.unsqueeze(1), 2)
-        dists = []
-        nearest_dists = []
-        
-        S = S.unsqueeze(0)
-        for i in range(Q.size()[0]):
-            print(i)
-            dists.append(self.__dist__(S, Q[i: i + 1].unsqueeze(1), 2))
-            # every 1000 or end 压缩一次
-            if len(dists) == 1000 or i == Q.size()[0] - 1:
-                nearest_dist = []
-                # 将已有tensor（1000 * support_size）拼接起来
-                dists = torch.cat(dists, axis = 0)
-                for label in range(torch.max(tag + 1)):
-                    nearest_dist.append(torch.max(dists[:, tag == label], 1)[0])
-                # nearest dist size is (1000, class)
-                nearest_dist = torch.stack(nearest_dist, dim = 1)
-                nearest_dists.append(nearest_dist)
-                dists = []
-                                   
-        return torch.cat(nearest_dists, axis = 0)
+    def __batch_dist__(self, S, Q):
+        return self.__dist__(S.unsqueeze(0), Q.unsqueeze(1), 2)
 
     def __get_nearest_dist__(self, embedding, tag, query):
         # 将support query中的span铺平
@@ -60,8 +39,12 @@ class SpanNNShot(nn.Module):
         for q in query:
             Q.extend(q)
         Q = torch.stack(Q, axis = 0)
-
-        return self.__batch_dist__(S, Q, S_tag)
+        
+        dist = self.__batch_dist__(S, Q)
+        for label in range(torch.max(tag)+1):
+            nearest_dist.append(torch.max(dist[:,tag==label], 1)[0])
+        nearest_dist = torch.stack(nearest_dist, dim=1) # [num_of_query_tokens, class_num]
+        return nearest_dist
 
     def __get_span_tensor__(self, sent_embs, text_mask):
         span_tensors = []
