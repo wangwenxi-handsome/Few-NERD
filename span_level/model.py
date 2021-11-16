@@ -8,7 +8,7 @@ class SpanNNShot(nn.Module):
     def __init__(self, word_encoder, dot = False, ignore_index = -1):
         super(SpanNNShot, self).__init__()
         self.ignore_index = ignore_index
-        self.word_encoder = nn.DataParallel(word_encoder)
+        self.word_encoder = word_encoder
         self.drop = nn.Dropout()
         self.cost = nn.CrossEntropyLoss(ignore_index=ignore_index)
         self.dot = dot

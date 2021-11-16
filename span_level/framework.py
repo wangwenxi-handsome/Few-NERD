@@ -116,6 +116,7 @@ class FewShotNERFramework:
                 tmp_pred_cnt = 0 
                 tmp_label_cnt = 0 
                 correct = 0
+                print("support is", support)
                 for i in range(query["sentence_num"][0]):
                     one_query = {}
                     # 取出query中的一句话
@@ -126,10 +127,13 @@ class FewShotNERFramework:
                     one_query["text_mask"] = query["text_mask"][i: i + 1].cuda()                   
                     one_label = torch.tensor(query["label"][i]).cuda()
                     
+                    print("query is", one_query)
+                    print("query label is", one_label)
+                    
                     # 模型预测
                     logits, pred = model(support, one_query)
                     loss = model.loss(logits, one_label) / float(grad_iter) / query["sentence_num"][0]
-                    iter_loss += self.item(loss.data)
+                    iter_loss += loss.item()
                     one_pred_cnt, one_label_cnt, one_correct = model.metrics_by_entity(pred, one_label)
                     tmp_pred_cnt += one_pred_cnt
                     tmp_label_cnt += one_label_cnt
