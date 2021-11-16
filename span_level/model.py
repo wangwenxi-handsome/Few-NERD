@@ -41,8 +41,8 @@ class SpanNNShot(nn.Module):
         Q = torch.stack(Q, axis = 0)
         
         dist = self.__batch_dist__(S, Q)
-        for label in range(torch.max(tag)+1):
-            nearest_dist.append(torch.max(dist[:,tag==label], 1)[0])
+        for label in range(torch.max(S_tag)+1):
+            nearest_dist.append(torch.max(dist[:,S_tag==label], 1)[0])
         nearest_dist = torch.stack(nearest_dist, dim=1) # [num_of_query_tokens, class_num]
         return nearest_dist
 
@@ -98,16 +98,6 @@ class SpanNNShot(nn.Module):
 
     def loss(self, logits, label):
         return self.cost(logits, label)
-
-    def item(self, x):
-        '''
-        PyTorch before and after 0.4
-        '''
-        torch_version = torch.__version__.split('.')
-        if int(torch_version[0]) == 0 and int(torch_version[1]) < 4:
-            return x[0]
-        else:
-            return x.item()
 
     def metrics_by_entity(self, pred, label):
         assert len(pred) == len(label)

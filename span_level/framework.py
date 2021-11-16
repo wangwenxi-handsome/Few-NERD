@@ -250,3 +250,13 @@ class FewShotNERFramework:
             sys.stdout.flush()
             print("")
         return precision, recall, f1
+    
+    def item(self, x):
+        '''
+        PyTorch before and after 0.4
+        '''
+        torch_version = torch.__version__.split('.')
+        if int(torch_version[0]) == 0 and int(torch_version[1]) < 4:
+            return x[0]
+        else:
+            return x.item()
