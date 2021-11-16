@@ -109,6 +109,6 @@ class SpanNNShot(nn.Module):
                 pred_entity += 1
             if label[i] != 0:
                 label_entity += 1
-            if pred[i] != 0 and label[i] != 0 and pred[i] == label:
+            if pred[i] != 0 and label[i] != 0 and pred[i] == label[i]:
                 correct_entity += 1
         return pred_entity, label_entity, correct_entity

@@ -113,6 +113,9 @@ class FewShotNERFramework:
                 support_label = set()        
                 for ls in support["label"]:
                     support_label = support_label | set(ls)
+
+                if len(support_label) != len(query["label2tag"][0]):
+                    continue
                 
                 # only support one batch
                 assert len(support["sentence_num"]) == 1
@@ -130,16 +133,9 @@ class FewShotNERFramework:
                     one_query["text_mask"] = query["text_mask"][i: i + 1].cuda()                   
                     one_label = torch.tensor(query["label"][i]).cuda()
                     
-                    # 如果此label中包含了support label中不包含的项或全为0，则跳过
-                    tag = (torch.max(one_label) == 0)
-                    for l in one_label[one_label != 0]:
-                        if l not in support_label:
-                            tag = 1
-                    if tag:
-                        print(one_label, support_label)
+                    # 如果此label中全为0，则跳过
+                    if int((torch.max(one_label) == 0).item()) == 1:
                         continue
-                    else:
-                        print("success")
                     
                     # 模型预测
                     logits, pred = model(support, one_query)
@@ -171,9 +167,8 @@ class FewShotNERFramework:
                     precision = correct_cnt / pred_cnt
                     recall = correct_cnt / label_cnt
                     f1 = 2 * precision * recall / (precision + recall)
-                    sys.stdout.write('step: {0:4} | loss: {1:2.6f} | [ENTITY] precision: {2:3.4f}, recall: {3:3.4f}, f1: {4:3.4f}'\
+                    print('step: {0:4} | loss: {1:2.6f} | [ENTITY] precision: {2:3.4f}, recall: {3:3.4f}, f1: {4:3.4f}'\
                         .format(it + 1, iter_loss/ iter_sample, precision, recall, f1) + '\r')
-                sys.stdout.flush()
 
                 if (it + 1) % val_step == 0:
                     _, _, f1 = self.eval(model, val_iter)
@@ -261,9 +256,7 @@ class FewShotNERFramework:
             precision = correct_cnt / pred_cnt
             recall = correct_cnt /label_cnt
             f1 = 2 * precision * recall / (precision + recall)
-            sys.stdout.write('[EVAL] step: {0:4} | [ENTITY] precision: {1:3.4f}, recall: {2:3.4f}, f1: {3:3.4f}'.format(it + 1, precision, recall, f1) + '\r')
-            sys.stdout.flush()
-            print("")
+            print('[EVAL] step: {0:4} | [ENTITY] precision: {1:3.4f}, recall: {2:3.4f}, f1: {3:3.4f}'.format(it + 1, precision, recall, f1) + '\r')
         return precision, recall, f1
     
     def item(self, x):
