@@ -110,13 +110,16 @@ class FewShotNERFramework:
                         if k != 'label' and k != 'sentence_num':
                             support[k] = support[k].cuda()
                 
+                support_label = set()        
+                for ls in support["label"]:
+                    support_label = support_label | set(ls)
+                
                 # only support one batch
                 assert len(support["sentence_num"]) == 1
                 assert len(query["sentence_num"]) == 1
                 tmp_pred_cnt = 0 
                 tmp_label_cnt = 0 
                 correct = 0
-                print("support is", support)
                 for i in range(query["sentence_num"][0]):
                     one_query = {}
                     # 取出query中的一句话
@@ -127,8 +130,16 @@ class FewShotNERFramework:
                     one_query["text_mask"] = query["text_mask"][i: i + 1].cuda()                   
                     one_label = torch.tensor(query["label"][i]).cuda()
                     
-                    print("query is", one_query)
-                    print("query label is", one_label)
+                    # 如果此label中包含了support label中不包含的项或全为0，则跳过
+                    tag = (torch.max(one_label) == 0)
+                    for l in one_label[one_label != 0]:
+                        if l not in support_label:
+                            tag = 1
+                    if tag:
+                        print(one_label, support_label)
+                        continue
+                    else:
+                        print("success")
                     
                     # 模型预测
                     logits, pred = model(support, one_query)
