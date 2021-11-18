@@ -226,9 +226,7 @@ class FewShotNERFramework:
         pred_cnt = 0 # pred entity cnt
         label_cnt = 0 # true label entity cnt
         correct_cnt = 0 # correct predicted entity cnt
-
         eval_iter = min(eval_iter, len(eval_dataset))
-
         with torch.no_grad():
             it = 0
             while it + 1 < eval_iter:
@@ -237,22 +235,40 @@ class FewShotNERFramework:
                         for k in support:
                             if k != 'label' and k != 'sentence_num':
                                 support[k] = support[k].cuda()
-                                query[k] = query[k].cuda()
-                        label = []
-                        for l in query['label']:
-                            label.extend(l)
-                        label = torch.tensor(label).cuda()
-                    logits, pred = model(support, query)
+                    
+                    support_label = set()        
+                    for ls in support["label"]:
+                        support_label = support_label | set(ls)
 
-                    tmp_pred_cnt, tmp_label_cnt, correct = model.metrics_by_entity(pred, label)
-                    pred_cnt += tmp_pred_cnt
-                    label_cnt += tmp_label_cnt
-                    correct_cnt += correct
+                    if len(support_label) != len(query["label2tag"][0]):
+                        continue
+                
+                    # only support one batch
+                    assert len(support["sentence_num"]) == 1
+                    assert len(query["sentence_num"]) == 1
+                    
+                    for i in range(query["sentence_num"][0]):
+                        one_query = {}
+                        # 取出query中的一句话
+                        one_query["sentence_num"] = [1]
+                        one_query["label2tag"] = query["label2tag"]
+                        one_query["word"] = query["word"][i: i + 1].cuda()
+                        one_query["mask"] = query["mask"][i: i + 1].cuda()
+                        one_query["text_mask"] = query["text_mask"][i: i + 1].cuda()                   
+                        one_label = torch.tensor(query["label"][i]).cuda()
+
+                        # 模型预测
+                        _, pred = model(support, one_query)
+                        one_pred_cnt, one_label_cnt, one_correct = model.metrics_by_entity(pred, one_label)
+                        pred_cnt += one_pred_cnt
+                        label_cnt += one_label_cnt
+                        correct_cnt += one_correct
+                        del pred
 
                     if it + 1 == eval_iter:
                         break
                     it += 1
-
+                    
             precision = correct_cnt / pred_cnt
             recall = correct_cnt /label_cnt
             f1 = 2 * precision * recall / (precision + recall)

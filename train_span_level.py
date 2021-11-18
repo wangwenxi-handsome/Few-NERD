@@ -3,6 +3,7 @@ import torch
 import numpy as np
 import argparse
 import os
+import time
 import torch
 import random
 from util.word_encoder import BERTWordEncoder
@@ -171,4 +172,6 @@ def main():
     print("RESULT: precision: %.4f, recall: %.4f, f1:%.4f" % (precision, recall, f1))
 
 if __name__ == "__main__":
+    start_time = time.time()
     main()
+    print(time.time() - start_time)
