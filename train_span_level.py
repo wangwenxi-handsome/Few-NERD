@@ -78,6 +78,10 @@ def main():
     parser.add_argument('--tau', default=0.05, type=float,
            help='StructShot parameter to re-normalizes the transition probabilities')
 
+    # for span level
+    parser.add_argument('--max_span_length', default=10, type=int,
+           help='Max length of span')  
+
     # experiment
     parser.add_argument('--use_sgd_for_bert', action='store_true',
            help='use SGD instead of AdamW for BERT.')
@@ -90,10 +94,12 @@ def main():
     batch_size = opt.batch_size
     model_name = opt.model
     max_length = opt.max_length
+    max_span_length = opt.max_span_length
 
     print("{}-way-{}-shot Few-Shot NER".format(N, K))
     print("model: {}".format(model_name))
     print("max_length: {}".format(max_length))
+    print("max_span_length: {}".format(max_span_length))
     print('mode: {}'.format(opt.mode))
 
     set_seed(opt.seed)
@@ -120,9 +126,9 @@ def main():
             os.system('unzip -d data/ data/episode-data.zip')
 
     # 获取dataloader
-    train_data_loader = get_loader(opt.train, tokenizer, batch_size=batch_size, max_length=max_length)
-    val_data_loader = get_loader(opt.dev, tokenizer, batch_size=batch_size, max_length=max_length)
-    test_data_loader = get_loader(opt.test, tokenizer, batch_size=batch_size, max_length=max_length)
+    train_data_loader = get_loader(opt.train, tokenizer, batch_size=batch_size, max_length=max_length, max_span_length=max_span_length)
+    val_data_loader = get_loader(opt.dev, tokenizer, batch_size=batch_size, max_length=max_length, max_span_length=max_span_length)
+    test_data_loader = get_loader(opt.test, tokenizer, batch_size=batch_size, max_length=max_length, max_span_length=max_span_length)
 
         
     prefix = '-'.join([model_name, opt.mode, str(N), str(K), 'seed'+str(opt.seed)])
@@ -132,7 +138,7 @@ def main():
         prefix += '-' + opt.ckpt_name
     
     # 初始化模型和框架
-    model = SpanNNShot(word_encoder, dot = opt.dot, ignore_index = opt.ignore_index)
+    model = SpanNNShot(word_encoder, dot = opt.dot, max_span_length = max_span_length, ignore_index = opt.ignore_index)
     framework = FewShotNERFramework(train_data_loader, val_data_loader, test_data_loader)
 
     if not os.path.exists('checkpoint'):

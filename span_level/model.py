@@ -5,13 +5,14 @@ import torch.nn as nn
 
 class SpanNNShot(nn.Module):
     
-    def __init__(self, word_encoder, dot = False, ignore_index = -1):
+    def __init__(self, word_encoder, dot = False, max_span_length = 10, ignore_index = -1):
         super(SpanNNShot, self).__init__()
         self.ignore_index = ignore_index
         self.word_encoder = word_encoder
         self.drop = nn.Dropout()
         self.cost = nn.CrossEntropyLoss(ignore_index=ignore_index)
         self.dot = dot
+        self.max_span_length = max_span_length
 
     def __dist__(self, x, y, dim):
         # 这里有broadcast机制
@@ -52,7 +53,7 @@ class SpanNNShot(nn.Module):
             sent_emb = sent[text_mask[i] == 1]
             span_tensor = []
             for start in range(len(sent_emb)):
-                for end in range(start, len(sent_emb)):
+                for end in range(start, min(start + self.max_span_length, len(sent_emb))):
                     span_tensor.append(torch.cat([sent_emb[start], sent_emb[end]], axis = 0))
             span_tensors.append(span_tensor)
         return span_tensors

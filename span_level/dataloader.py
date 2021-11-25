@@ -3,11 +3,10 @@ import json
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
-from span_level.utils import get_span_pos
 
 
 class SpanLevelDataset(Dataset):
-    def __init__(self, filepath, tokenizer, max_length, ignore_label_id=-1):
+    def __init__(self, filepath, tokenizer, max_length, max_span_length, ignore_label_id=-1):
         if not os.path.exists(filepath):
             print("[ERROR] Data file does not exist!")
             assert(0)
@@ -15,6 +14,7 @@ class SpanLevelDataset(Dataset):
         self.tokenizer = tokenizer
         self.samples = self.__load_data_from_file__(filepath)
         self.max_length = max_length
+        self.max_span_length = max_span_length
         self.ignore_label_id = ignore_label_id
     
     def __load_data_from_file__(self, filepath):
@@ -90,14 +90,25 @@ class SpanLevelDataset(Dataset):
                     span_labels.remove(l)
             span_labels_list.append(tmp_span_label)
 
-        # 将span_label铺平
+        # 将span_label转化为一个span对应一个标签的形式
         labels = []
+        span_labels_dict = {}
+
         for i, span_labels in enumerate(span_labels_list):
+            # 取出句子长度和span labels的字典形式
             sent_len = len(tokens_list[i])
-            label = [0] * int(sent_len * (sent_len + 1) / 2)
+            span_label_dict = {}
             for span_label in span_labels:
-                pos = get_span_pos(span_label[1], span_label[2], sent_len)
-                label[pos] = span_label[0]
+                assert span_label[2] - span_label[1] < self.max_span_length
+                span_label_dict[(span_label[1], span_label[2])] = span_label[0]
+            
+            label = []
+            for start in range(sent_len):
+                for end in range(start, min(start + self.max_span_length, sent_len)):
+                    if (start, end) in span_label_dict:
+                        label.append(span_label_dict[(start, end)])
+                    else:
+                        label.append(0)
             labels.append(label)
 
         # add special tokens and get masks
@@ -198,11 +209,12 @@ def get_loader(
         tokenizer,
         batch_size, 
         max_length, 
+        max_span_length,
         num_workers = 0, 
         collate_fn = collate_fn, 
         ignore_index = -1
     ):
-    dataset = SpanLevelDataset(filepath, tokenizer, max_length, ignore_label_id=ignore_index)
+    dataset = SpanLevelDataset(filepath, tokenizer, max_length, max_span_length, ignore_label_id=ignore_index)
     data_loader = DataLoader(dataset=dataset,
             batch_size=batch_size,
             shuffle=True,

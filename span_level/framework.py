@@ -104,65 +104,35 @@ class FewShotNERFramework:
         it = 0
         while it + 1 < train_iter:
             for _, (support, query) in enumerate(self.train_data_loader):
-                # support, query = next(self.train_data_loader)
                 if torch.cuda.is_available():
                     for k in support:
                         if k != 'label' and k != 'sentence_num':
                             support[k] = support[k].cuda()
-                
-                support_label = set()        
-                for ls in support["label"]:
-                    support_label = support_label | set(ls)
+                            query[k] = query[k].cuda()
+                    label = torch.cat(query['label'], 0)
+                    label = label.cuda()
 
-                if len(support_label) != len(query["label2tag"][0]):
-                    continue
-                
-                # only support one batch
-                assert len(support["sentence_num"]) == 1
-                assert len(query["sentence_num"]) == 1
-                tmp_pred_cnt = 0 
-                tmp_label_cnt = 0 
-                correct = 0
-                for i in range(query["sentence_num"][0]):
-                    one_query = {}
-                    # 取出query中的一句话
-                    one_query["sentence_num"] = [1]
-                    one_query["label2tag"] = query["label2tag"]
-                    one_query["word"] = query["word"][i: i + 1].cuda()
-                    one_query["mask"] = query["mask"][i: i + 1].cuda()
-                    one_query["text_mask"] = query["text_mask"][i: i + 1].cuda()                   
-                    one_label = torch.tensor(query["label"][i]).cuda()
+                logits, pred = model(support, query)
+                loss = model.loss(logits, label) / float(grad_iter)
+                tmp_pred_cnt, tmp_label_cnt, correct = model.metrics_by_entity(pred, label)
                     
-                    # 如果此label中全为0，则跳过
-                    if int((torch.max(one_label) == 0).item()) == 1:
-                        continue
-                    
-                    # 模型预测
-                    logits, pred = model(support, one_query)
-                    loss = model.loss(logits, one_label) / float(grad_iter) / query["sentence_num"][0]
-                    iter_loss += loss.item()
-                    one_pred_cnt, one_label_cnt, one_correct = model.metrics_by_entity(pred, one_label)
-                    tmp_pred_cnt += one_pred_cnt
-                    tmp_label_cnt += one_label_cnt
-                    correct += one_correct
-                    if fp16:
-                        with amp.scale_loss(loss, optimizer) as scaled_loss:
-                            scaled_loss.backward()
-                    else:
-                        loss.backward()
-                    del logits, pred, loss
+                if fp16:
+                    with amp.scale_loss(loss, optimizer) as scaled_loss:
+                        scaled_loss.backward()
+                else:
+                    loss.backward()
                 
                 if it % grad_iter == 0:
                     optimizer.step()
                     scheduler.step()
                     optimizer.zero_grad()
 
+                iter_loss += self.item(loss.data)
                 #iter_right += self.item(right.data)
                 pred_cnt += tmp_pred_cnt
                 label_cnt += tmp_label_cnt
                 correct_cnt += correct
                 iter_sample += 1
-                
                 if (it + 1) % 100 == 0 or (it + 1) % val_step == 0:
                     precision = correct_cnt / pred_cnt
                     recall = correct_cnt / label_cnt
@@ -235,35 +205,15 @@ class FewShotNERFramework:
                         for k in support:
                             if k != 'label' and k != 'sentence_num':
                                 support[k] = support[k].cuda()
+                                query[k] = query[k].cuda()
+                        label = torch.cat(query['label'], 0)
+                        label = label.cuda()
+                    logits, pred = model(support, query)
                     
-                    support_label = set()        
-                    for ls in support["label"]:
-                        support_label = support_label | set(ls)
-
-                    if len(support_label) != len(query["label2tag"][0]):
-                        continue
-                
-                    # only support one batch
-                    assert len(support["sentence_num"]) == 1
-                    assert len(query["sentence_num"]) == 1
-                    
-                    for i in range(query["sentence_num"][0]):
-                        one_query = {}
-                        # 取出query中的一句话
-                        one_query["sentence_num"] = [1]
-                        one_query["label2tag"] = query["label2tag"]
-                        one_query["word"] = query["word"][i: i + 1].cuda()
-                        one_query["mask"] = query["mask"][i: i + 1].cuda()
-                        one_query["text_mask"] = query["text_mask"][i: i + 1].cuda()                   
-                        one_label = torch.tensor(query["label"][i]).cuda()
-
-                        # 模型预测
-                        _, pred = model(support, one_query)
-                        one_pred_cnt, one_label_cnt, one_correct = model.metrics_by_entity(pred, one_label)
-                        pred_cnt += one_pred_cnt
-                        label_cnt += one_label_cnt
-                        correct_cnt += one_correct
-                        del pred
+                    tmp_pred_cnt, tmp_label_cnt, correct = model.metrics_by_entity(pred, label)
+                    pred_cnt += tmp_pred_cnt
+                    label_cnt += tmp_label_cnt
+                    correct_cnt += correct
 
                     if it + 1 == eval_iter:
                         break
