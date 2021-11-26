@@ -99,7 +99,7 @@ class SpanLevelDataset(Dataset):
             sent_len = len(tokens_list[i])
             span_label_dict = {}
             for span_label in span_labels:
-                assert span_label[2] - span_label[1] < self.max_span_length
+                # assert span_label[2] - span_label[1] < self.max_span_length
                 span_label_dict[(span_label[1], span_label[2])] = span_label[0]
             
             label = []
