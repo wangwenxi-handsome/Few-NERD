@@ -47,14 +47,21 @@ class SpanNNShot(nn.Module):
         nearest_dist = torch.stack(nearest_dist, dim=1) # [num_of_query_tokens, class_num]
         return nearest_dist
 
-    def __get_span_tensor__(self, sent_embs, text_mask):
+    def __get_span_tensor__(self, sent_embs, text_mask, sub_words):
         span_tensors = []
         for i, sent in enumerate(sent_embs):
             sent_emb = sent[text_mask[i] == 1]
             span_tensor = []
+            sub_word = sub_words[i]
             for start in range(len(sent_emb)):
-                for end in range(start, min(start + self.max_span_length, len(sent_emb))):
-                    span_tensor.append(torch.cat([sent_emb[start], sent_emb[end]], axis = 0))
+                if sub_word[start] in [0, 1]:
+                    end = start
+                    span_num = 0
+                    while(span_num < self.max_span_length and end < len(sent_emb)):
+                        if sub_word[end] in [0, 3]:
+                            span_tensor.append(torch.cat([sent_emb[start], sent_emb[end]], axis = 0))
+                            span_num += 1
+                        end += 1
             span_tensors.append(span_tensor)
         return span_tensors
 
@@ -75,8 +82,8 @@ class SpanNNShot(nn.Module):
         assert query_emb.size()[:2] == query['mask'].size()
 
         # 处理成span的形式
-        support_spans = self.__get_span_tensor__(support_emb, support["text_mask"])
-        query_spans = self.__get_span_tensor__(query_emb, query["text_mask"])
+        support_spans = self.__get_span_tensor__(support_emb, support["text_mask"], support["sub_word"])
+        query_spans = self.__get_span_tensor__(query_emb, query["text_mask"], query["sub_word"])
 
         logits = []
         current_support_num = 0

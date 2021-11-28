@@ -24,23 +24,30 @@ class SpanLevelDataset(Dataset):
             lines[i] = json.loads(lines[i].strip())
         return lines
     
-    def __additem__(self, d, word, mask, text_mask, label):
+    def __additem__(self, d, word, mask, text_mask, label, sub_word):
         d['word'] += word
         d['mask'] += mask
         d['label'] += label
         d['text_mask'] += text_mask
+        d['sub_word'] += sub_word
     
     def __get_token_label_list__(self, words, tags):
         tokens = []
         labels = []
+        sub_words = []
         for word, tag in zip(words, tags):
             word_tokens = self.tokenizer.tokenize(word)
             if word_tokens:
+                # tokens and labels
                 tokens.extend(word_tokens)
-                # Use the real label id for the first token of the word, and padding ids for the remaining tokens
                 word_labels = [self.tag2label[tag]] + [self.ignore_label_id] * (len(word_tokens) - 1)
                 labels.extend(word_labels)
-        return tokens, labels
+                # sub word
+                if len(word_tokens) == 1:
+                    sub_words.append(0)
+                else:
+                    sub_words.extend([1] + [2] * (len(word_tokens) - 2) + [3])
+        return tokens, labels, sub_words
 
     def __get_all_span_label__(self, label):
         span_label = []
@@ -57,14 +64,14 @@ class SpanLevelDataset(Dataset):
                 l += 1
         return span_label
 
-    def __getraw__(self, tokens, span_labels):
+    def __getraw__(self, tokens, span_labels, sub_words):
         # 将分词好的句子和label处理成bert的输入形式
-
         # get tokenized word list, attention mask, text mask (mask [CLS], [SEP] as well), tags   
         # split into chunks of length (max_length-2)
         # 2 is for special tokens [CLS] and [SEP]
         tokens_list = []
         span_labels_list = []
+        sub_words_list = []
         label_start_id = 0
         while len(tokens) > self.max_length - 2:
             # 处理labels，保留在句子范围内的label，并且修正id
@@ -77,11 +84,15 @@ class SpanLevelDataset(Dataset):
             span_labels_list.append(tmp_span_label)
             label_start_id += self.max_length - 2
             # 处理tokens
-            tokens_list.append(tokens[:self.max_length-2])
-            tokens = tokens[self.max_length-2:]
+            tokens_list.append(tokens[:self.max_length - 2])
+            tokens = tokens[self.max_length - 2:]
+            # 处理subwords
+            sub_words_list.append(sub_words[:self.max_length - 2])
+            sub_words = sub_words[self.max_length - 2]
         # 超过最大长度但不足最大长度的部分也要补齐
         if tokens:
             tokens_list.append(tokens)
+            sub_words_list.append(sub_words)
             tmp_span_label = []
             for l in span_labels:
                 tmp_l = [l[0], l[1] - label_start_id, l[2] - label_start_id]
@@ -95,6 +106,8 @@ class SpanLevelDataset(Dataset):
         span_labels_dict = {}
 
         for i, span_labels in enumerate(span_labels_list):
+            # 取出raw labels
+            sub_word = sub_words_list[i]
             # 取出句子长度和span labels的字典形式
             sent_len = len(tokens_list[i])
             span_label_dict = {}
@@ -104,11 +117,20 @@ class SpanLevelDataset(Dataset):
             
             label = []
             for start in range(sent_len):
-                for end in range(start, min(start + self.max_span_length, sent_len)):
-                    if (start, end) in span_label_dict:
-                        label.append(span_label_dict[(start, end)])
-                    else:
-                        label.append(0)
+                # 如果start位置是一个单独的词或第一个子词才会加入span label
+                if sub_word[start] in [0, 1]:
+                    end = start
+                    span_num = 0
+                    while(span_num < self.max_span_length and end < sent_len):
+                        # end位置是一个单独的词或最后一个子词才会加入span label
+                        if sub_word[end] in [0, 3]:
+                            if (start, end) in span_label_dict:
+                                label.append(span_label_dict[(start, end)])
+                            else:
+                                label.append(0)
+                            # 下一个位置是新的span
+                            span_num += 1
+                        end += 1
             labels.append(label)
 
         # add special tokens and get masks
@@ -135,7 +157,7 @@ class SpanLevelDataset(Dataset):
             text_mask[1:len(tokens)-1] = 1
             text_mask_list.append(text_mask)
             
-        return indexed_tokens_list, mask_list, text_mask_list, labels
+        return indexed_tokens_list, mask_list, text_mask_list, labels, sub_words_list
 
     def __populate__(self, data, savelabeldic=False):
         '''
@@ -147,18 +169,18 @@ class SpanLevelDataset(Dataset):
         'sentence_num': number of sentences in this set (a batch contains multiple sets)
         'text_mask': 0 for special tokens and paddings, 1 for real text
         '''
-        dataset = {'word': [], 'mask': [], 'label':[], 'sentence_num':[], 'text_mask':[]}
+        dataset = {'word': [], 'mask': [], 'label':[], 'sentence_num':[], 'text_mask':[], 'sub_word':[]}
         for i in range(len(data['word'])):
             # 传入一句话和这句话对应的label并进行分词
-            tokens, labels = self.__get_token_label_list__(data['word'][i], data['label'][i])
+            tokens, raw_labels, sub_words = self.__get_token_label_list__(data['word'][i], data['label'][i])
             # 将label处理成span-level的形式
-            span_labels = self.__get_all_span_label__(labels)
+            span_labels = self.__get_all_span_label__(raw_labels)
             # 转换成bert的输入
-            word, mask, text_mask, label = self.__getraw__(tokens, span_labels)
+            word, mask, text_mask, label, sub_word = self.__getraw__(tokens, span_labels, sub_words)
             word = torch.tensor(word).long()
             mask = torch.tensor(mask).long()
             text_mask = torch.tensor(text_mask).long()
-            self.__additem__(dataset, word, mask, text_mask, label)
+            self.__additem__(dataset, word, mask, text_mask, label, sub_word)
         dataset['sentence_num'] = [len(dataset['word'])]
         if savelabeldic:
             dataset['label2tag'] = [self.label2tag]

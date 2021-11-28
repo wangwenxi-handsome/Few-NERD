@@ -6,7 +6,7 @@ from transformers import AdamW, get_linear_schedule_with_warmup
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 
-class FewShotNERFramework:
+class RandFewShotNERFramework:
 
     def __init__(self, train_data_loader, val_data_loader, test_data_loader):
         '''
@@ -108,36 +108,24 @@ class FewShotNERFramework:
                 # support, query = next(self.train_data_loader)
                 if torch.cuda.is_available():
                     for k in support:
-                        if k != 'label' and k != 'sentence_num' and k != 'sub_word':
+                        if k != 'span_id':
                             support[k] = support[k].cuda()
-
-                # 有的support label被截断了，去除此类数据
-                support_label = set()        
-                for ls in support["label"]:
-                    support_label = support_label | set(ls)
-                if len(support_label) != len(query["label2tag"][0]):
-                    lack_support_num += 1
-                    continue
                 
-                # only support one batch
-                assert len(support["sentence_num"]) == 1
-                assert len(query["sentence_num"]) == 1
                 tmp_pred_cnt = 0 
                 tmp_label_cnt = 0 
                 correct = 0
-                for i in range(query["sentence_num"][0]):
+                for i in range(len(query["label"])):
                     one_query = {}
-                    # 取出query中的一句话
-                    one_query["sentence_num"] = [1]
                     one_query["label2tag"] = query["label2tag"]
-                    one_query["word"] = query["word"][i: i + 1].cuda()
-                    one_query["mask"] = query["mask"][i: i + 1].cuda()
-                    one_query["text_mask"] = query["text_mask"][i: i + 1].cuda()                   
-                    one_label = torch.tensor(query["label"][i]).cuda()
+                    one_query["word"] = query["word"].cuda()
+                    one_query["mask"] = query["mask"].cuda()
+                    one_query["text_mask"] = query["text_mask"].cuda()
+                    one_query["span_id"] = query["span_id"][i]             
+                    one_label = query["label"][i].cuda()
                     
                     # 模型预测
                     logits, pred = model(support, one_query)
-                    loss = model.loss(logits, one_label) / float(grad_iter) / query["sentence_num"][0]
+                    loss = model.loss(logits, one_label) / float(grad_iter) / len(query["label"])
                     iter_loss += loss.item()
                     one_pred_cnt, one_label_cnt, one_correct = model.metrics_by_entity(pred, one_label)
                     tmp_pred_cnt += one_pred_cnt
@@ -148,7 +136,6 @@ class FewShotNERFramework:
                             scaled_loss.backward()
                     else:
                         loss.backward()
-                    del logits, pred, loss
                 
                 if it % grad_iter == 0:
                     optimizer.step()
@@ -234,30 +221,17 @@ class FewShotNERFramework:
                 for _, (support, query) in enumerate(eval_dataset):
                     if torch.cuda.is_available():
                         for k in support:
-                            if k != 'label' and k != 'sentence_num' and k != 'sub_word':
+                            if k != 'span_id':
                                 support[k] = support[k].cuda()
-
-                    # 有的support label被截断了，去除此类数据
-                    support_label = set()        
-                    for ls in support["label"]:
-                        support_label = support_label | set(ls)
-                    if len(support_label) != len(query["label2tag"][0]):
-                        lack_support_num += 1
-                        continue
-                
-                    # only support one batch
-                    assert len(support["sentence_num"]) == 1
-                    assert len(query["sentence_num"]) == 1
-                    
-                    for i in range(query["sentence_num"][0]):
+     
+                    for i in range(len(query["label"])):
                         one_query = {}
-                        # 取出query中的一句话
-                        one_query["sentence_num"] = [1]
                         one_query["label2tag"] = query["label2tag"]
-                        one_query["word"] = query["word"][i: i + 1].cuda()
-                        one_query["mask"] = query["mask"][i: i + 1].cuda()
-                        one_query["text_mask"] = query["text_mask"][i: i + 1].cuda()                   
-                        one_label = torch.tensor(query["label"][i]).cuda()
+                        one_query["word"] = query["word"].cuda()
+                        one_query["mask"] = query["mask"].cuda()
+                        one_query["text_mask"] = query["text_mask"].cuda()
+                        one_query["span_id"] = query["span_id"][i]                
+                        one_label = query["label"][i].cuda()
 
                         # 模型预测
                         _, pred = model(support, one_query)
@@ -265,7 +239,6 @@ class FewShotNERFramework:
                         pred_cnt += one_pred_cnt
                         label_cnt += one_label_cnt
                         correct_cnt += one_correct
-                        del pred
 
                     if it + 1 == eval_iter:
                         break
