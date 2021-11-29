@@ -92,11 +92,15 @@ class RandSpanDataset(Dataset):
                         spans.append((start, end))
                         if (start, end) in span_label_dict:
                             labels.append(span_label_dict[(start, end)])
+                            span_label_dict.pop((start, end))
                         else:
                             labels.append(0)
                         # 下一个位置是新的span
                         span_num += 1
                     end += 1
+        for l in span_label_dict:
+            labels.append(span_label_dict[l])
+            spans.append(l)
         return labels, spans
 
     def __getraw__(self, tokens, span_labels, sub_words):
@@ -228,7 +232,7 @@ def get_loader(
         max_span_length,
         support_span_num = 1000,
         query_span_num = 1000,
-        num_workers = 0, 
+        num_workers = 8, 
         ignore_index = -1
     ):
     dataset = RandSpanDataset(filepath, tokenizer, max_length, max_span_length, ignore_label_id=ignore_index)

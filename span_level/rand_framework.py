@@ -103,9 +103,7 @@ class RandFewShotNERFramework:
 
         it = 0
         while it + 1 < train_iter:
-            lack_support_num = 0
             for _, (support, query) in enumerate(self.train_data_loader):
-                # support, query = next(self.train_data_loader)
                 if torch.cuda.is_available():
                     for k in support:
                         if k != 'span_id':
@@ -172,7 +170,6 @@ class RandFewShotNERFramework:
                     break
                 it += 1
         
-            print("lack support num", lack_support_num)
         print("\n####################\n")
         print("Finish training ")
 
@@ -192,8 +189,6 @@ class RandFewShotNERFramework:
         ckpt: Checkpoint path. Set as None if using current model parameters.
         return: Accuracy
         '''
-        print("")
-        
         model.eval()
         if ckpt is None:
             print("Use val dataset")
@@ -214,7 +209,6 @@ class RandFewShotNERFramework:
         correct_cnt = 0 # correct predicted entity cnt
         eval_iter = min(eval_iter, len(eval_dataset))
 
-        lack_support_num = 0
         with torch.no_grad():
             it = 0
             while it + 1 < eval_iter:
@@ -244,7 +238,6 @@ class RandFewShotNERFramework:
                         break
                     it += 1
             
-            print("val lack label", lack_support_num)
             precision = correct_cnt / pred_cnt
             recall = correct_cnt /label_cnt
             f1 = 2 * precision * recall / (precision + recall)

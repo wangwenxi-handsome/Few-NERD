@@ -81,6 +81,10 @@ def main():
     # for span level
     parser.add_argument('--max_span_length', default=30, type=int,
            help='Max length of span')  
+    parser.add_argument('--support_span_num', default=1000, type=int,
+           help='support span num')  
+    parser.add_argument('--query_span_num', default=1000, type=int,
+           help='query span num')  
 
     # experiment
     parser.add_argument('--use_sgd_for_bert', action='store_true',
@@ -126,9 +130,9 @@ def main():
             os.system('unzip -d data/ data/episode-data.zip')
 
     # 获取dataloader
-    train_data_loader = get_loader(opt.train, tokenizer, batch_size=batch_size, max_length=max_length, max_span_length=max_span_length)
-    val_data_loader = get_loader(opt.dev, tokenizer, batch_size=batch_size, max_length=max_length, max_span_length=max_span_length)
-    test_data_loader = get_loader(opt.test, tokenizer, batch_size=batch_size, max_length=max_length, max_span_length=max_span_length)
+    train_data_loader = get_loader(opt.train, tokenizer, batch_size=batch_size, max_length=max_length, max_span_length=max_span_length, support_span_num=opt.support_span_num, query_span_num=opt.query_span_num)
+    val_data_loader = get_loader(opt.dev, tokenizer, batch_size=batch_size, max_length=max_length, max_span_length=max_span_length, support_span_num=opt.support_span_num, query_span_num=opt.query_span_num)
+    test_data_loader = get_loader(opt.test, tokenizer, batch_size=batch_size, max_length=max_length, max_span_length=max_span_length, support_span_num=opt.support_span_num, query_span_num=opt.query_span_num)
 
         
     prefix = '-'.join([model_name, opt.mode, str(N), str(K), 'seed'+str(opt.seed)])
