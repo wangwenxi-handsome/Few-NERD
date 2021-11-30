@@ -90,11 +90,11 @@ class RandSpanNNShot(nn.Module):
 
 class FocalLoss(nn.Module):
     '''Multi-class Focal loss implementation'''
-    def __init__(self, gamma=2, weight=None,ignore_index=-100):
+    def __init__(self, alpha=0.25, gamma=2, weight=None):
         super(FocalLoss, self).__init__()
+        self.alpha = alpha
         self.gamma = gamma
         self.weight = weight
-        self.ignore_index=ignore_index
 
     def forward(self, input, target):
         """
@@ -103,6 +103,6 @@ class FocalLoss(nn.Module):
         """
         logpt = F.log_softmax(input, dim=1)
         pt = torch.exp(logpt)
-        logpt = (1-pt)**self.gamma * logpt
-        loss = F.nll_loss(logpt, target, self.weight,ignore_index=self.ignore_index)
+        logpt = self.alpha * (1-pt)**self.gamma * logpt
+        loss = F.nll_loss(logpt, target, self.weight)
         return loss
