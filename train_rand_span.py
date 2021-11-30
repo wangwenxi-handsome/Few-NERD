@@ -1,15 +1,15 @@
+import os
+import time
+import parse
+import random
 from transformers import BertTokenizer
 import torch
 import numpy as np
-import argparse
-import os
-import time
-import torch
-import random
 from util.word_encoder import BERTWordEncoder
 from span_level.rand_dataloader import get_loader
 from span_level.rand_framework import RandFewShotNERFramework
 from span_level.rand_model import RandSpanNNShot
+from util.rand_parse import init_parser
 
 def set_seed(seed):
     torch.manual_seed(seed)
@@ -18,79 +18,7 @@ def set_seed(seed):
     random.seed(seed)
     torch.backends.cudnn.deterministic = True
 
-def main():
-    # 读取命令行参数
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--mode', default='inter',
-            help='training mode, must be in [inter, intra, supervised]')
-    parser.add_argument('--trainN', default=2, type=int,
-            help='N in train')
-    parser.add_argument('--N', default=2, type=int,
-            help='N way')
-    parser.add_argument('--K', default=2, type=int,
-            help='K shot')
-    parser.add_argument('--Q', default=3, type=int,
-            help='Num of query per class')
-    parser.add_argument('--batch_size', default=4, type=int,
-            help='batch size')
-    parser.add_argument('--train_iter', default=600, type=int,
-            help='num of iters in training')
-    parser.add_argument('--val_iter', default=100, type=int,
-            help='num of iters in validation')
-    parser.add_argument('--test_iter', default=500, type=int,
-            help='num of iters in testing')
-    parser.add_argument('--val_step', default=20, type=int,
-           help='val after training how many iters')
-    parser.add_argument('--model', default='proto',
-            help='model name, must be basic-bert, proto, nnshot, or structshot')
-    parser.add_argument('--max_length', default=100, type=int,
-           help='max length')
-    parser.add_argument('--lr', default=1e-4, type=float,
-           help='learning rate')
-    parser.add_argument('--grad_iter', default=1, type=int,
-           help='accumulate gradient every x iterations')
-    parser.add_argument('--load_ckpt', default=None,
-           help='load ckpt')
-    parser.add_argument('--save_ckpt', default=None,
-           help='save ckpt')
-    parser.add_argument('--fp16', action='store_true',
-           help='use nvidia apex fp16')
-    parser.add_argument('--only_test', action='store_true',
-           help='only test')
-    parser.add_argument('--ckpt_name', type=str, default='',
-           help='checkpoint name.')
-    parser.add_argument('--seed', type=int, default=0,
-           help='random seed')
-    parser.add_argument('--ignore_index', type=int, default=-1,
-           help='label index to ignore when calculating loss and metrics')
-    parser.add_argument('--use_sampled_data', action='store_true',
-           help='use released sampled data, the data should be stored at "data/episode-data/" ')
-
-    # only for bert / roberta
-    parser.add_argument('--pretrain_ckpt', default=None,
-           help='bert / roberta pre-trained checkpoint')
-
-    # only for prototypical networks
-    parser.add_argument('--dot', action='store_true', 
-           help='use dot instead of L2 distance for proto')
-
-    # only for structshot
-    parser.add_argument('--tau', default=0.05, type=float,
-           help='StructShot parameter to re-normalizes the transition probabilities')
-
-    # for span level
-    parser.add_argument('--max_span_length', default=30, type=int,
-           help='Max length of span')  
-    parser.add_argument('--support_span_num', default=1000, type=int,
-           help='support span num')  
-    parser.add_argument('--query_span_num', default=1000, type=int,
-           help='query span num')  
-
-    # experiment
-    parser.add_argument('--use_sgd_for_bert', action='store_true',
-           help='use SGD instead of AdamW for BERT.')
-
-    opt = parser.parse_args()
+def main(opt):
     trainN = opt.trainN
     N = opt.N
     K = opt.K
@@ -142,7 +70,7 @@ def main():
         prefix += '-' + opt.ckpt_name
     
     # 初始化模型和框架
-    model = RandSpanNNShot(word_encoder, dot = opt.dot, max_span_length = max_span_length, ignore_index = opt.ignore_index)
+    model = RandSpanNNShot(word_encoder, dot = opt.dot, max_span_length = max_span_length, loss = opt.loss)
     framework = RandFewShotNERFramework(train_data_loader, val_data_loader, test_data_loader)
 
     if not os.path.exists('checkpoint'):
@@ -182,6 +110,17 @@ def main():
     print("RESULT: precision: %.4f, recall: %.4f, f1:%.4f" % (precision, recall, f1))
 
 if __name__ == "__main__":
+    # 初始化parser
+    parser = init_parser()
+    opt = parser.parse_args()
+    
+    # experiment1
     start_time = time.time()
-    main()
+    main(opt)
+    print(time.time() - start_time)
+
+    # experiment2
+    start_time = time.time()
+    opt.loss = "focal"
+    main(opt)
     print(time.time() - start_time)
