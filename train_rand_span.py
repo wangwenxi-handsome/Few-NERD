@@ -1,6 +1,5 @@
 import os
 import time
-import parse
 import random
 from transformers import BertTokenizer
 import torch
@@ -32,6 +31,8 @@ def main(opt):
     print("model: {}".format(model_name))
     print("max_length: {}".format(max_length))
     print("max_span_length: {}".format(max_span_length))
+    print("support_span_num", opt.support_span_num)
+    print("query_span_num", opt.query_span_num)
     print('mode: {}'.format(opt.mode))
 
     set_seed(opt.seed)
@@ -70,7 +71,7 @@ def main(opt):
         prefix += '-' + opt.ckpt_name
     
     # 初始化模型和框架
-    model = RandSpanNNShot(word_encoder, dot = opt.dot, max_span_length = max_span_length, loss = opt.loss)
+    model = RandSpanNNShot(word_encoder, dot = opt.dot, max_span_length = max_span_length, loss = opt.loss, focal_alpha = opt.focal_alpha)
     framework = RandFewShotNERFramework(train_data_loader, val_data_loader, test_data_loader)
 
     if not os.path.exists('checkpoint'):
@@ -87,7 +88,7 @@ def main(opt):
         if opt.lr == -1:
             opt.lr = 2e-5
 
-        framework.train(
+        recorder = framework.train(
             model, 
             load_ckpt=opt.load_ckpt, 
             save_ckpt=ckpt,
@@ -104,23 +105,29 @@ def main(opt):
         if ckpt is None:
             print("Warning: --load_ckpt is not specified. Will load Hugginface pre-trained checkpoint.")
             ckpt = 'none'
+        recorder = {}
 
     # test
     precision, recall, f1 = framework.eval(model, opt.test_iter, ckpt=ckpt)
+    recorder["test"] = [precision, recall, f1]
     print("RESULT: precision: %.4f, recall: %.4f, f1:%.4f" % (precision, recall, f1))
+    return recorder
 
 if __name__ == "__main__":
     # 初始化parser
     parser = init_parser()
     opt = parser.parse_args()
-    
+    recorders = []
+
+    opt.support_span_num = 500
+    opt.query_span_num = 2000
+    opt.train_iter = 30000
+    opt.loss = "focal"
+
     # experiment1
     start_time = time.time()
-    main(opt)
+    recorders.append(main(opt))
     print(time.time() - start_time)
 
-    # experiment2
-    start_time = time.time()
-    opt.loss = "focal"
-    main(opt)
-    print(time.time() - start_time)
+    # save recorders
+    np.save("recorder.npy", recorders)

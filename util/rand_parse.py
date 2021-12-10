@@ -30,6 +30,8 @@ def init_parser():
            help='accumulate gradient every x iterations')
     parser.add_argument('--loss', type=str, default="ce",
            help='use released sampled data, the data should be stored at "data/episode-data/" ')
+    parser.add_argument('--focal_alpha', type=int, default=1,
+           help='alpha in focal loss')
 
     # for span level
     parser.add_argument('--max_length', default=512, type=int,
@@ -42,6 +44,8 @@ def init_parser():
            help='query span num')  
 
     # only for bert / roberta
+    parser.add_argument('--model', default='nnshot',
+           help='model name, must be basic-bert, proto, nnshot, or structshot')
     parser.add_argument('--pretrain_ckpt', default=None,
            help='bert / roberta pre-trained checkpoint')
     # only for prototypical networks

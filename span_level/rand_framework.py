@@ -60,6 +60,10 @@ class RandFewShotNERFramework:
     
         # Init optimizer
         print('Use bert optim!')
+
+        # train record
+        recorder = {"p": [], "r": [], "f": []}
+
         # 设置优化器和学习率
         parameters_to_optimize = list(model.named_parameters())
         no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
@@ -150,6 +154,9 @@ class RandFewShotNERFramework:
                     precision = correct_cnt / pred_cnt
                     recall = correct_cnt / label_cnt
                     f1 = 2 * precision * recall / (precision + recall)
+                    recorder["p"].append(precision)
+                    recorder["r"].append(recall)
+                    recorder["f"].append(f1)
                     print('step: {0:4} | loss: {1:2.6f} | [ENTITY] precision: {2:3.4f}, recall: {3:3.4f}, f1: {4:3.4f}'\
                         .format(it + 1, iter_loss/ iter_sample, precision, recall, f1) + '\r')
 
@@ -172,6 +179,7 @@ class RandFewShotNERFramework:
         
         print("\n####################\n")
         print("Finish training ")
+        return recorder
 
     def eval(
         self,

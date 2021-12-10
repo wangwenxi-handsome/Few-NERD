@@ -6,14 +6,21 @@ import torch.nn.functional as F
 
 class RandSpanNNShot(nn.Module):
     
-    def __init__(self, word_encoder, dot = False, max_span_length = 10, loss = "ce"):
+    def __init__(
+        self, 
+        word_encoder, 
+        dot = False, 
+        max_span_length = 10, 
+        loss = "ce",
+        focal_alpha = 1,
+    ):
         super(RandSpanNNShot, self).__init__()
         self.word_encoder = word_encoder
         self.drop = nn.Dropout()
         if loss == "ce":
             self.cost = nn.CrossEntropyLoss()
         elif loss == "focal":
-            self.cost = FocalLoss()
+            self.cost = FocalLoss(alpha = focal_alpha)
         self.dot = dot
         self.max_span_length = max_span_length
 
@@ -90,9 +97,11 @@ class RandSpanNNShot(nn.Module):
 
 class FocalLoss(nn.Module):
     '''Multi-class Focal loss implementation'''
-    def __init__(self, alpha=0.25, gamma=2, weight=None):
+    def __init__(self, alpha=1, gamma=2, weight=None, label_num=6):
         super(FocalLoss, self).__init__()
-        self.alpha = alpha
+        self.n = label_num
+        percents = 1 + (self.n - 1) * alpha
+        self.alpah_list = [1 / percents] + [alpha / percents] * (self.n - 1)
         self.gamma = gamma
         self.weight = weight
 
@@ -103,6 +112,13 @@ class FocalLoss(nn.Module):
         """
         logpt = F.log_softmax(input, dim=1)
         pt = torch.exp(logpt)
-        logpt = self.alpha * (1-pt)**self.gamma * logpt
+        logpt = (1-pt)**self.gamma * logpt
+
+        alpha_logpt = target.clone().double()
+        for i in range(self.n):
+            alpha_logpt[alpha_logpt == i] = self.alpah_list[i]
+        alpha_logpt = alpha_logpt.unsqueeze(-1).expand(logpt.size())
+        logpt = logpt * alpha_logpt
+
         loss = F.nll_loss(logpt, target, self.weight)
         return loss
